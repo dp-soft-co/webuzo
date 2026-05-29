@@ -1,0 +1,41 @@
+{
+  "name": "dp-soft-co/webuzo",
+  "description": "Laravel client for Webuzo Admin and Enduser APIs",
+  "type": "library",
+  "license": "MIT",
+  "keywords": [
+    "laravel",
+    "webuzo",
+    "api",
+    "hosting",
+    "control-panel"
+  ],
+  "homepage": "https://github.com/dp-soft-co/webuzo",
+  "support": {
+    "issues": "https://github.com/dp-soft-co/webuzo/issues",
+    "source": "https://github.com/dp-soft-co/webuzo"
+  },
+  "require": {
+    "php": "^8.2",
+    "ext-json": "*",
+    "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
+    "illuminate/http": "^10.0|^11.0|^12.0|^13.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Webuzo\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Webuzo\\WebuzoServiceProvider"
+      ],
+      "aliases": {
+        "Webuzo": "Webuzo\\Facades\\Webuzo"
+      }
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
