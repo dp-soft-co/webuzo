@@ -8,21 +8,54 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use Webuzo\Support\ApiResponse;
+use Webuzo\Support\ValidatesParameters;
+use Webuzo\Support\Logger;
+use Webuzo\Support\Retryable;
+use Webuzo\Support\RateLimiter;
+use Webuzo\Exceptions\ApiException;
 
 abstract class BaseClient
 {
+    use ValidatesParameters, Logger, Retryable;
+
+    protected ?RateLimiter $rateLimiter = null;
+
     public function __construct(
         protected array $config,
         protected ?string $loginAs = null
     ) {
+        $this->loggingEnabled = (bool) ($this->config['logging'] ?? false);
+        $this->maxRetries = (int) ($this->config['max_retries'] ?? 3);
+        $this->retryDelay = (int) ($this->config['retry_delay'] ?? 1000);
+
+        // Initialize rate limiter if enabled
+        if (($this->config['rate_limiting'] ?? false) === true) {
+            $this->rateLimiter = new RateLimiter(
+                (int) ($this->config['rate_limit_max'] ?? 60),
+                (int) ($this->config['rate_limit_window'] ?? 60)
+            );
+        }
     }
 
     abstract protected function portKey(): string;
 
     public function call(string $act, array $params = []): ApiResponse
     {
+        // Check rate limiting
+        if ($this->rateLimiter !== null && !$this->rateLimiter->attempt($act)) {
+            $availableIn = $this->rateLimiter->getAvailableIn($act);
+            throw new ApiException(
+                "Rate limit exceeded for action '{$act}'. Try again in {$availableIn} seconds.",
+                429,
+                null,
+                ['act' => $act, 'available_in' => $availableIn]
+            );
+        }
+
         $url = $this->buildUrl($act);
         $payload = $this->buildPayload($params);
+
+        $this->logRequest($act, $params, $url);
 
         $request = $this->makeRequest();
         [$request, $payload] = $this->applyAuth($request, $payload);
@@ -31,6 +64,12 @@ abstract class BaseClient
 
         $raw = $response->body();
         $data = $this->decode($raw);
+
+        $this->logResponse($act, $response->status(), $raw, $data);
+
+        if (!$response->ok()) {
+            $this->logError($act, $raw, ['status' => $response->status()]);
+        }
 
         return new ApiResponse(
             $response->status(),

@@ -15,6 +15,8 @@ trait HasAdminEndpoints
 
     public function addUser(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['create_user', 'user', 'domain', 'user_passwd', 'cnf_user_passwd'], 'addUser');
+        $this->validateEmail($params, 'email', 'addUser');
         return $this->call('add_user', $params);
     }
 
@@ -25,16 +27,19 @@ trait HasAdminEndpoints
 
     public function deleteUser(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['delete_user'], 'deleteUser');
         return $this->call('users', $params);
     }
 
     public function suspendUser(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['suspend', 'skip'], 'suspendUser');
         return $this->call('users', $params);
     }
 
     public function unsuspendUser(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['unsuspend', 'skip'], 'unsuspendUser');
         return $this->call('users', $params);
     }
 

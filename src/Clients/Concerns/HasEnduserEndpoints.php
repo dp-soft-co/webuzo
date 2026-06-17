@@ -10,6 +10,17 @@ trait HasEnduserEndpoints
 {
     public function createDomain(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['add', 'domain_type', 'domain', 'wildcard', 'issue_lecert'], 'createDomain');
+        $this->validateOneOf($params, 'domain_type', ['parked', 'subdomain', 'addon'], 'createDomain');
+
+        if (($params['domain_type'] ?? '') === 'subdomain') {
+            $this->validateRequired($params, ['domainpath', 'subdomain'], 'createDomain');
+        }
+
+        if (($params['domain_type'] ?? '') === 'addon') {
+            $this->validateRequired($params, ['domainpath'], 'createDomain');
+        }
+
         return $this->call('domainadd', $params);
     }
 
@@ -40,6 +51,8 @@ trait HasEnduserEndpoints
 
     public function addEmailAccount(array $params = []): ApiResponse
     {
+        $this->validateRequired($params, ['add', 'login', 'newpass', 'conf', 'domain'], 'addEmailAccount');
+        $this->validateOneOf($params, 'quota', ['unlimited', 'limited', ''], 'addEmailAccount');
         return $this->call('add_email_account', $params);
     }
 
