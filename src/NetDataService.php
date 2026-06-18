@@ -424,55 +424,112 @@ class NetDataService
     }
 
     // -------------------------------------------------------------------------
-    // User bandwidth / disk usage from Webuzo
+    // User resource usage (Webuzo quota + NetData CPU/RAM)
     // -------------------------------------------------------------------------
 
     /**
-     * استهلاك مستخدم معين (bandwidth + disk) من Webuzo Admin API
+     * استهلاك مستخدم معين:
+     *  - Disk + Bandwidth + Email + DB  : من Webuzo Admin API (quota)
+     *  - CPU + RAM                      : من NetData (users.cpu / users.mem charts)
      */
     public static function getUserUsage(string $username): array
     {
+        // --- Webuzo quota data ---
         $userResult = WebuzoService::getUser($username);
+        $quota      = [];
 
-        if (!$userResult['success']) {
-            return ['success' => false, 'message' => $userResult['error'] ?? 'User not found'];
-        }
+        if ($userResult['success']) {
+            $resources = $userResult['user']['resources'];
+            $disk      = $resources['disk'] ?? [];
+            $bw        = $resources['bandwidth'] ?? [];
 
-        $resources = $userResult['user']['resources'];
-        $disk      = $resources['disk'] ?? [];
-        $bw        = $resources['bandwidth'] ?? [];
+            $diskUsed  = (float) ($disk['used_bytes'] ?? 0) / 1024 / 1024;
+            $diskLimit = (float) ($disk['hard_limit'] ?? 0) / 1024 / 1024;
+            if ($diskUsed === 0.0 && isset($disk['used'])) {
+                $diskUsed  = (float) ($disk['used'] ?? 0);
+                $diskLimit = (float) ($disk['limit'] ?? 0);
+            }
+            $diskPct = $diskLimit > 0 ? round($diskUsed / $diskLimit * 100, 2) : (float) ($disk['percent'] ?? 0);
 
-        $diskUsed  = (float) ($disk['used'] ?? 0);
-        $diskLimit = (float) ($disk['limit'] ?? 0);
-        $diskPct   = $diskLimit > 0 ? round($diskUsed / $diskLimit * 100, 2) : 0;
+            $bwUsed  = (float) ($bw['used_bytes'] ?? 0) / 1024 / 1024;
+            $bwLimit = (float) ($bw['limit_bytes'] ?? 0) / 1024 / 1024;
+            if ($bwUsed === 0.0 && isset($bw['used'])) {
+                $bwUsed  = (float) ($bw['used'] ?? 0);
+                $bwLimit = (float) ($bw['limit'] ?? 0);
+            }
+            $bwPct = $bwLimit > 0 ? round($bwUsed / $bwLimit * 100, 2) : (float) ($bw['percent'] ?? 0);
 
-        $bwUsed    = (float) ($bw['used'] ?? 0);
-        $bwLimit   = (float) ($bw['limit'] ?? 0);
-        $bwPct     = $bwLimit > 0 ? round($bwUsed / $bwLimit * 100, 2) : 0;
-
-        return [
-            'success'   => true,
-            'username'  => $username,
-            'disk' => [
-                'used_mb'   => $diskUsed,
-                'limit_mb'  => $diskLimit,
-                'used_gb'   => round($diskUsed / 1024, 3),
-                'limit_gb'  => round($diskLimit / 1024, 3),
-                'percent'   => $diskPct,
-                'raw'       => $disk,
-            ],
-            'bandwidth' => [
-                'used_mb'   => $bwUsed,
-                'limit_mb'  => $bwLimit,
-                'used_gb'   => round($bwUsed / 1024, 3),
-                'limit_gb'  => round($bwLimit / 1024, 3),
-                'percent'   => $bwPct,
-                'raw'       => $bw,
-            ],
-            'other_resources' => [
+            $quota = [
+                'disk' => [
+                    'used_mb'   => round($diskUsed, 3),
+                    'limit_mb'  => round($diskLimit, 3),
+                    'used_gb'   => round($diskUsed / 1024, 3),
+                    'limit_gb'  => round($diskLimit / 1024, 3),
+                    'percent'   => $diskPct,
+                    'raw'       => $disk,
+                ],
+                'bandwidth' => [
+                    'used_mb'   => round($bwUsed, 3),
+                    'limit_mb'  => round($bwLimit, 3),
+                    'used_gb'   => round($bwUsed / 1024, 3),
+                    'limit_gb'  => round($bwLimit / 1024, 3),
+                    'percent'   => $bwPct,
+                    'raw'       => $bw,
+                ],
                 'email_accounts' => $resources['email_accounts'] ?? [],
                 'databases'      => $resources['databases'] ?? [],
+            ];
+        }
+
+        // --- NetData CPU per user (users.cpu chart) ---
+        $cpuRes  = self::get('/api/v1/data', [
+            'chart'   => 'users.cpu',
+            'after'   => -60,
+            'points'  => 1,
+            'group'   => 'average',
+            'format'  => 'json',
+            'options' => 'jsonwrap',
+        ]);
+
+        $cpuUsage = null;
+        if ($cpuRes['success']) {
+            $names  = $cpuRes['data']['dimension_names'] ?? [];
+            $values = $cpuRes['data']['latest_values'] ?? [];
+            $dims   = array_combine($names, $values);
+            $cpuUsage = isset($dims[$username]) ? round((float) $dims[$username], 3) : null;
+        }
+
+        // --- NetData RAM per user (users.mem chart) ---
+        $memRes  = self::get('/api/v1/data', [
+            'chart'   => 'users.mem',
+            'after'   => -60,
+            'points'  => 1,
+            'group'   => 'average',
+            'format'  => 'json',
+            'options' => 'jsonwrap',
+        ]);
+
+        $memUsage = null;
+        if ($memRes['success']) {
+            $names  = $memRes['data']['dimension_names'] ?? [];
+            $values = $memRes['data']['latest_values'] ?? [];
+            $dims   = array_combine($names, $values);
+            $memMb  = isset($dims[$username]) ? abs((float) $dims[$username]) : null;
+            $memUsage = $memMb !== null ? round($memMb, 2) : null;
+        }
+
+        return [
+            'success'  => true,
+            'username' => $username,
+            'cpu' => [
+                'used_percent' => $cpuUsage,
+                'note'         => $cpuUsage === null ? 'Not available in NetData (users.cpu chart missing or user not active)' : null,
             ],
+            'ram' => [
+                'used_mb' => $memUsage,
+                'note'    => $memUsage === null ? 'Not available in NetData (users.mem chart missing or user not active)' : null,
+            ],
+            'quota' => $quota ?: null,
         ];
     }
 
