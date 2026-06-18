@@ -270,10 +270,11 @@ class WebuzoService
 
             $resellers = [];
             foreach ($response->data['resellers'] ?? [] as $name => $data) {
+                $users = self::getUsersByOwner($name);
                 $resellers[] = [
                     'name'      => $name,
                     'title'     => $data['title'] ?? $name,
-                    'num_users' => $data['num_users'] ?? 0,
+                    'num_users' => $users['success'] ? $users['total'] : 0,
                 ];
             }
 
