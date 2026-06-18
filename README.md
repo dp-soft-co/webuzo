@@ -215,6 +215,101 @@ if ($result['success']) {
 
 ---
 
+## NetData Integration
+
+Monitor your server in real-time using NetData's REST API.
+
+### Configuration
+
+Add to your `.env`:
+
+```env
+NETDATA_PORT=19999
+NETDATA_SCHEME=http
+NETDATA_TIMEOUT=10
+```
+
+> **Note:** NetData uses the same `WEBUZO_HOST` from your existing config. No separate host setting needed.
+
+### NetDataService Examples
+
+```php
+use Webuzo\NetDataService;
+
+// لقطة شاملة للسيرفر (CPU + RAM + Disk + Network + Load + Alerts)
+NetDataService::getServerSnapshot();
+
+// معلومات الـ Agent
+NetDataService::getInfo();
+
+// استخدام CPU (آخر 60 ثانية)
+NetDataService::getCpu(60);
+
+// استخدام RAM
+NetDataService::getRam();
+
+// مساحة Disk لكل partition
+NetDataService::getDiskSpace();
+
+// Disk I/O (read/write)
+NetDataService::getDiskIo();
+
+// استخدام الشبكة
+NetDataService::getNetwork();
+
+// Load Average (1m, 5m, 15m)
+NetDataService::getLoadAverage();
+
+// التنبيهات النشطة
+NetDataService::getAlerts();
+// أو جميع التنبيهات
+NetDataService::getAlerts(true);
+
+// بيانات أي chart محدد
+NetDataService::getChartData('nginx.requests', 300, 60);
+
+// قائمة جميع الـ charts المتاحة
+NetDataService::getCharts();
+
+// استهلاك مستخدم معين (bandwidth + disk) من Webuzo
+NetDataService::getUserUsage('client01');
+```
+
+### NetData Example Routes
+
+```php
+use Webuzo\NetDataService;
+
+// لقطة كاملة للسيرفر
+Route::get('/netdata/snapshot', fn() => response()->json(NetDataService::getServerSnapshot()));
+
+// CPU
+Route::get('/netdata/cpu', fn() => response()->json(NetDataService::getCpu()));
+
+// RAM
+Route::get('/netdata/ram', fn() => response()->json(NetDataService::getRam()));
+
+// Disk Space
+Route::get('/netdata/disk', fn() => response()->json(NetDataService::getDiskSpace()));
+
+// Network
+Route::get('/netdata/network', fn() => response()->json(NetDataService::getNetwork()));
+
+// Load Average
+Route::get('/netdata/load', fn() => response()->json(NetDataService::getLoadAverage()));
+
+// Alerts
+Route::get('/netdata/alerts', fn() => response()->json(NetDataService::getAlerts()));
+
+// Chart data
+Route::get('/netdata/chart/{chart}', fn($chart) => response()->json(NetDataService::getChartData($chart)));
+
+// استهلاك مستخدم
+Route::get('/netdata/users/{username}/usage', fn($u) => response()->json(NetDataService::getUserUsage($u)));
+```
+
+---
+
 ## Example Routes
 
 The following routes demonstrate how to use `WebuzoService` in Laravel. Add them to your `routes/web.php` as needed.

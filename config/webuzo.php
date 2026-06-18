@@ -23,4 +23,10 @@ return [
         'username' => env('WEBUZO_USERNAME', ''),
         'password' => env('WEBUZO_PASSWORD', ''),
     ],
+
+    'netdata' => [
+        'port'    => (int) env('NETDATA_PORT', 19999),
+        'scheme'  => env('NETDATA_SCHEME', 'http'),
+        'timeout' => (int) env('NETDATA_TIMEOUT', 10),
+    ],
 ];

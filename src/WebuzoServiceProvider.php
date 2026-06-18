@@ -19,6 +19,7 @@ class WebuzoServiceProvider extends ServiceProvider
         $this->app->alias(WebuzoManager::class, 'webuzo');
 
         $this->app->singleton(WebuzoService::class);
+        $this->app->singleton(NetDataService::class);
     }
 
     public function boot(): void
