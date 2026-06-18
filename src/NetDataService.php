@@ -443,21 +443,16 @@ class NetDataService
             $disk      = $resources['disk'] ?? [];
             $bw        = $resources['bandwidth'] ?? [];
 
-            $diskUsed  = (float) ($disk['used_bytes'] ?? 0) / 1024 / 1024;
-            $diskLimit = (float) ($disk['hard_limit'] ?? 0) / 1024 / 1024;
-            if ($diskUsed === 0.0 && isset($disk['used'])) {
-                $diskUsed  = (float) ($disk['used'] ?? 0);
-                $diskLimit = (float) ($disk['limit'] ?? 0);
-            }
-            $diskPct = $diskLimit > 0 ? round($diskUsed / $diskLimit * 100, 2) : (float) ($disk['percent'] ?? 0);
+            // bytes → MB (1 MB = 1,048,576 bytes)
+            $diskUsed  = isset($disk['used_bytes'])  ? (float) $disk['used_bytes']  / 1048576 : 0.0;
+            $diskLimit = isset($disk['limit_bytes'])
+                ? (float) $disk['limit_bytes'] / 1048576
+                : (isset($disk['hard_limit']) ? (float) $disk['hard_limit'] * 1024 : 0.0);
+            $diskPct   = (float) ($disk['percent'] ?? ($diskLimit > 0 ? $diskUsed / $diskLimit * 100 : 0));
 
-            $bwUsed  = (float) ($bw['used_bytes'] ?? 0) / 1024 / 1024;
-            $bwLimit = (float) ($bw['limit_bytes'] ?? 0) / 1024 / 1024;
-            if ($bwUsed === 0.0 && isset($bw['used'])) {
-                $bwUsed  = (float) ($bw['used'] ?? 0);
-                $bwLimit = (float) ($bw['limit'] ?? 0);
-            }
-            $bwPct = $bwLimit > 0 ? round($bwUsed / $bwLimit * 100, 2) : (float) ($bw['percent'] ?? 0);
+            $bwUsed  = isset($bw['used_bytes'])  ? (float) $bw['used_bytes']  / 1048576 : 0.0;
+            $bwLimit = isset($bw['limit_bytes']) ? (float) $bw['limit_bytes'] / 1048576 : 0.0;
+            $bwPct   = (float) ($bw['percent'] ?? ($bwLimit > 0 ? $bwUsed / $bwLimit * 100 : 0));
 
             $quota = [
                 'disk' => [
@@ -481,41 +476,102 @@ class NetDataService
             ];
         }
 
-        // --- NetData CPU per user (users.cpu chart) ---
-        $cpuRes  = self::get('/api/v1/data', [
-            'chart'   => 'users.cpu',
-            'after'   => -60,
-            'points'  => 1,
-            'group'   => 'average',
-            'format'  => 'json',
-            'options' => 'jsonwrap',
+        // --- NetData CPU per user ---
+        // Try v3 API first (user.cpu_utilization context with label filter)
+        $cpuUsage = null;
+        $cpuV3 = self::get('/api/v3/data', [
+            'context'      => 'user.cpu_utilization',
+            'chart_labels' => "user=$username",
+            'after'        => -60,
+            'points'       => 1,
+            'group_by'     => 'dimension',
+            'format'       => 'json',
         ]);
 
-        $cpuUsage = null;
-        if ($cpuRes['success']) {
-            $names  = $cpuRes['data']['dimension_names'] ?? [];
-            $values = $cpuRes['data']['latest_values'] ?? [];
-            $dims   = array_combine($names, $values);
-            $cpuUsage = isset($dims[$username]) ? round((float) $dims[$username], 3) : null;
+        if ($cpuV3['success'] && !empty($cpuV3['data']['result']['data'])) {
+            $row    = $cpuV3['data']['result']['data'][0] ?? [];
+            $cols   = array_column($cpuV3['data']['result']['labels'] ?? [], null);
+            $total  = 0;
+            foreach ($row as $i => $val) {
+                if ($i > 0 && is_numeric($val)) {
+                    $total += abs((float) $val);
+                }
+            }
+            $cpuUsage = round($total, 3);
+        } else {
+            // fallback: v1 users.cpu chart — dimension = username
+            $cpuV1 = self::get('/api/v1/data', [
+                'chart'   => 'users.cpu',
+                'after'   => -60,
+                'points'  => 1,
+                'group'   => 'average',
+                'format'  => 'json',
+                'options' => 'jsonwrap',
+            ]);
+            if ($cpuV1['success']) {
+                $dims = array_combine(
+                    $cpuV1['data']['dimension_names'] ?? [],
+                    $cpuV1['data']['latest_values'] ?? []
+                );
+                $cpuUsage = isset($dims[$username]) ? round(abs((float) $dims[$username]), 3) : null;
+            }
         }
 
-        // --- NetData RAM per user (users.mem chart) ---
-        $memRes  = self::get('/api/v1/data', [
-            'chart'   => 'users.mem',
+        // --- NetData RAM per user ---
+        $memUsage = null;
+        $memV3 = self::get('/api/v3/data', [
+            'context'      => 'user.mem_usage',
+            'chart_labels' => "user=$username",
+            'after'        => -60,
+            'points'       => 1,
+            'group_by'     => 'dimension',
+            'format'       => 'json',
+        ]);
+
+        if ($memV3['success'] && !empty($memV3['data']['result']['data'])) {
+            $row = $memV3['data']['result']['data'][0] ?? [];
+            $total = 0;
+            foreach ($row as $i => $val) {
+                if ($i > 0 && is_numeric($val)) {
+                    $total += abs((float) $val);
+                }
+            }
+            $memUsage = round($total, 2);
+        } else {
+            // fallback: v1 users.mem chart
+            $memV1 = self::get('/api/v1/data', [
+                'chart'   => 'users.mem',
+                'after'   => -60,
+                'points'  => 1,
+                'group'   => 'average',
+                'format'  => 'json',
+                'options' => 'jsonwrap',
+            ]);
+            if ($memV1['success']) {
+                $dims = array_combine(
+                    $memV1['data']['dimension_names'] ?? [],
+                    $memV1['data']['latest_values'] ?? []
+                );
+                $memUsage = isset($dims[$username]) ? round(abs((float) $dims[$username]), 2) : null;
+            }
+        }
+
+        // --- NetData processes per user ---
+        $processCount = null;
+        $procRes = self::get('/api/v1/data', [
+            'chart'   => 'users.processes',
             'after'   => -60,
             'points'  => 1,
             'group'   => 'average',
             'format'  => 'json',
             'options' => 'jsonwrap',
         ]);
-
-        $memUsage = null;
-        if ($memRes['success']) {
-            $names  = $memRes['data']['dimension_names'] ?? [];
-            $values = $memRes['data']['latest_values'] ?? [];
-            $dims   = array_combine($names, $values);
-            $memMb  = isset($dims[$username]) ? abs((float) $dims[$username]) : null;
-            $memUsage = $memMb !== null ? round($memMb, 2) : null;
+        if ($procRes['success']) {
+            $dims = array_combine(
+                $procRes['data']['dimension_names'] ?? [],
+                $procRes['data']['latest_values'] ?? []
+            );
+            $processCount = isset($dims[$username]) ? (int) abs((float) $dims[$username]) : null;
         }
 
         return [
@@ -523,12 +579,13 @@ class NetDataService
             'username' => $username,
             'cpu' => [
                 'used_percent' => $cpuUsage,
-                'note'         => $cpuUsage === null ? 'Not available in NetData (users.cpu chart missing or user not active)' : null,
+                'note'         => $cpuUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
             'ram' => [
                 'used_mb' => $memUsage,
-                'note'    => $memUsage === null ? 'Not available in NetData (users.mem chart missing or user not active)' : null,
+                'note'    => $memUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
+            'processes' => $processCount,
             'quota' => $quota ?: null,
         ];
     }
