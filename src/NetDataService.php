@@ -477,101 +477,66 @@ class NetDataService
         }
 
         // --- NetData CPU per user ---
-        // Try v3 API first (user.cpu_utilization context with label filter)
+        // Chart ID format: user.{username}_cpu_utilization
         $cpuUsage = null;
-        $cpuV3 = self::get('/api/v3/data', [
-            'context'      => 'user.cpu_utilization',
-            'chart_labels' => "user=$username",
-            'after'        => -60,
-            'points'       => 1,
-            'group_by'     => 'dimension',
-            'format'       => 'json',
-        ]);
-
-        if ($cpuV3['success'] && !empty($cpuV3['data']['result']['data'])) {
-            $row    = $cpuV3['data']['result']['data'][0] ?? [];
-            $cols   = array_column($cpuV3['data']['result']['labels'] ?? [], null);
-            $total  = 0;
-            foreach ($row as $i => $val) {
-                if ($i > 0 && is_numeric($val)) {
-                    $total += abs((float) $val);
-                }
-            }
-            $cpuUsage = round($total, 3);
-        } else {
-            // fallback: v1 users.cpu chart — dimension = username
-            $cpuV1 = self::get('/api/v1/data', [
-                'chart'   => 'users.cpu',
-                'after'   => -60,
-                'points'  => 1,
-                'group'   => 'average',
-                'format'  => 'json',
-                'options' => 'jsonwrap',
-            ]);
-            if ($cpuV1['success']) {
-                $dims = array_combine(
-                    $cpuV1['data']['dimension_names'] ?? [],
-                    $cpuV1['data']['latest_values'] ?? []
-                );
-                $cpuUsage = isset($dims[$username]) ? round(abs((float) $dims[$username]), 3) : null;
-            }
-        }
-
-        // --- NetData RAM per user ---
-        $memUsage = null;
-        $memV3 = self::get('/api/v3/data', [
-            'context'      => 'user.mem_usage',
-            'chart_labels' => "user=$username",
-            'after'        => -60,
-            'points'       => 1,
-            'group_by'     => 'dimension',
-            'format'       => 'json',
-        ]);
-
-        if ($memV3['success'] && !empty($memV3['data']['result']['data'])) {
-            $row = $memV3['data']['result']['data'][0] ?? [];
-            $total = 0;
-            foreach ($row as $i => $val) {
-                if ($i > 0 && is_numeric($val)) {
-                    $total += abs((float) $val);
-                }
-            }
-            $memUsage = round($total, 2);
-        } else {
-            // fallback: v1 users.mem chart
-            $memV1 = self::get('/api/v1/data', [
-                'chart'   => 'users.mem',
-                'after'   => -60,
-                'points'  => 1,
-                'group'   => 'average',
-                'format'  => 'json',
-                'options' => 'jsonwrap',
-            ]);
-            if ($memV1['success']) {
-                $dims = array_combine(
-                    $memV1['data']['dimension_names'] ?? [],
-                    $memV1['data']['latest_values'] ?? []
-                );
-                $memUsage = isset($dims[$username]) ? round(abs((float) $dims[$username]), 2) : null;
-            }
-        }
-
-        // --- NetData processes per user ---
-        $processCount = null;
-        $procRes = self::get('/api/v1/data', [
-            'chart'   => 'users.processes',
+        $cpuRes = self::get('/api/v1/data', [
+            'chart'   => "user.{$username}_cpu_utilization",
             'after'   => -60,
             'points'  => 1,
             'group'   => 'average',
             'format'  => 'json',
             'options' => 'jsonwrap',
         ]);
-        if ($procRes['success']) {
-            $dims = array_combine(
-                $procRes['data']['dimension_names'] ?? [],
-                $procRes['data']['latest_values'] ?? []
-            );
-            $processCount = isset($dims[$username]) ? (int) abs((float) $dims[$username]) : null;
+        if ($cpuRes['success'] && !empty($cpuRes['data']['latest_values'])) {
+            $total = 0;
+            foreach ($cpuRes['data']['latest_values'] as $val) {
+                if (is_numeric($val)) {
+                    $total += abs((float) $val);
+                }
+            }
+            $cpuUsage = round($total, 3);
+        }
+
+        // --- NetData RAM per user ---
+        // Chart ID format: user.{username}_mem_usage (in MiB)
+        $memUsage = null;
+        $memRes = self::get('/api/v1/data', [
+            'chart'   => "user.{$username}_mem_usage",
+            'after'   => -60,
+            'points'  => 1,
+            'group'   => 'average',
+            'format'  => 'json',
+            'options' => 'jsonwrap',
+        ]);
+        if ($memRes['success'] && !empty($memRes['data']['latest_values'])) {
+            $total = 0;
+            foreach ($memRes['data']['latest_values'] as $val) {
+                if (is_numeric($val)) {
+                    $total += abs((float) $val);
+                }
+            }
+            $memUsage = round($total, 2);
+        }
+
+        // --- NetData processes per user ---
+        // Chart ID format: user.{username}_processes
+        $processCount = null;
+        $procRes = self::get('/api/v1/data', [
+            'chart'   => "user.{$username}_processes",
+            'after'   => -60,
+            'points'  => 1,
+            'group'   => 'average',
+            'format'  => 'json',
+            'options' => 'jsonwrap',
+        ]);
+        if ($procRes['success'] && !empty($procRes['data']['latest_values'])) {
+            $total = 0;
+            foreach ($procRes['data']['latest_values'] as $val) {
+                if (is_numeric($val)) {
+                    $total += abs((float) $val);
+                }
+            }
+            $processCount = (int) round($total);
         }
 
         return [
