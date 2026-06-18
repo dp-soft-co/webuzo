@@ -508,6 +508,36 @@ class WebuzoService
         }
     }
 
+    public static function deleteDatabaseWithUser(string $username, string $dbName, string $dbUser): array
+    {
+        try {
+            $prefix = $username . '_';
+            $fullDbName = $prefix . $dbName;
+            $fullDbUser = $prefix . $dbUser;
+
+            $dbResponse = Webuzo::enduserAs($username)->deleteDatabase(['delete_db' => $fullDbName]);
+            if (!$dbResponse->ok() || isset($dbResponse->data['error'])) {
+                return ['success' => false, 'step' => 'delete_database', 'message' => self::extractError($dbResponse)];
+            }
+
+            $userResponse = Webuzo::enduserAs($username)->deleteDatabase(['delete_userdb' => $fullDbUser]);
+            if (!$userResponse->ok() || isset($userResponse->data['error'])) {
+                return ['success' => false, 'step' => 'delete_user', 'message' => self::extractError($userResponse), 'database_deleted' => true];
+            }
+
+            return [
+                'success'  => true,
+                'message'  => 'Database and user deleted successfully',
+                'database' => $fullDbName,
+                'db_user'  => $fullDbUser,
+            ];
+        } catch (ValidationException $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'error_details' => ['context' => $e->getContext(), 'type' => 'validation']];
+        } catch (ApiException $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'error_details' => ['type' => 'api']];
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Domains
     // -------------------------------------------------------------------------
