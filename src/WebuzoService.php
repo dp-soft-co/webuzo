@@ -238,6 +238,34 @@ class WebuzoService
         }
     }
 
+    public static function getUserResourceLimits(string $username): array
+    {
+        try {
+            $response = Webuzo::admin()->resourceLimits();
+
+            if (!$response->ok()) {
+                return ['success' => false, 'error' => $response->error()];
+            }
+
+            foreach ($response->data['resource_limits'] ?? [] as $planName => $planData) {
+                $users = $planData['users'] ?? [];
+                if (in_array($username, $users, true)) {
+                    return [
+                        'success'      => true,
+                        'plan'         => $planName,
+                        'cpu_quota'    => $planData['cpuquota'] ?? null,
+                        'memory_max'   => $planData['mem_max']  ?? null,
+                        'max_tasks'    => $planData['maxtask']  ?? null,
+                    ];
+                }
+            }
+
+            return ['success' => true, 'plan' => null, 'cpu_quota' => null, 'memory_max' => null, 'max_tasks' => null];
+        } catch (ApiException | ValidationException $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     public static function assignResourcePlan(string $username, string $planName): array
     {
         try {

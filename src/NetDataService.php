@@ -438,6 +438,13 @@ class NetDataService
         $userResult = WebuzoService::getUser($username);
         $quota      = [];
 
+        // --- Webuzo resource limits (CPU/RAM plan) ---
+        $limitsResult = WebuzoService::getUserResourceLimits($username);
+        $cpuLimit     = $limitsResult['success'] ? $limitsResult['cpu_quota']  : null;
+        $memLimit     = $limitsResult['success'] ? $limitsResult['memory_max'] : null;
+        $taskLimit    = $limitsResult['success'] ? $limitsResult['max_tasks']  : null;
+        $resourcePlan = $limitsResult['success'] ? $limitsResult['plan']       : null;
+
         if ($userResult['success']) {
             $resources = $userResult['user']['resources'];
             $disk      = $resources['disk'] ?? [];
@@ -540,17 +547,23 @@ class NetDataService
         }
 
         return [
-            'success'  => true,
-            'username' => $username,
+            'success'       => true,
+            'username'      => $username,
+            'resource_plan' => $resourcePlan,
             'cpu' => [
-                'used_percent' => $cpuUsage,
-                'note'         => $cpuUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
+                'used_percent'  => $cpuUsage,
+                'limit_percent' => $cpuLimit !== null ? (float) $cpuLimit : null,
+                'note'          => $cpuUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
             'ram' => [
-                'used_mb' => $memUsage,
-                'note'    => $memUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
+                'used_mb'  => $memUsage,
+                'limit_mb' => $memLimit !== null ? (float) $memLimit : null,
+                'note'     => $memUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
-            'processes' => $processCount,
+            'processes' => [
+                'count'     => $processCount,
+                'max_tasks' => $taskLimit !== null ? (int) $taskLimit : null,
+            ],
             'quota' => $quota ?: null,
         ];
     }
