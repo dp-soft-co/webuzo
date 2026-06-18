@@ -148,6 +148,9 @@ WebuzoService::forceHttps('client01', 'client01.com', false);  // إلغاء
 // إنشاء قاعدة بيانات + مستخدم + كل الصلاحيات دفعة واحدة
 WebuzoService::createDatabaseWithUser('client01', 'mydb', 'mydbuser', 'StrongPass123');
 // النتيجة: database = client01_mydb, db_user = client01_mydbuser
+
+// حذف قاعدة بيانات + مستخدم
+WebuzoService::deleteDatabaseWithUser('client01', 'mydb', 'mydbuser');
 ```
 
 ### Domains
@@ -256,6 +259,10 @@ Route::get('/users/{username}/domains/{domain}/force-https/disable', fn($u, $d) 
 // Databases
 Route::get('/users/{username}/databases/create', function ($username) {
     $result = WebuzoService::createDatabaseWithUser($username, 'mydb', 'mydbuser', 'StrongPass123');
+    return response()->json($result);
+});
+Route::get('/users/{username}/databases/delete', function ($username) {
+    $result = WebuzoService::deleteDatabaseWithUser($username, 'mydb', 'mydbuser');
     return response()->json($result);
 });
 
