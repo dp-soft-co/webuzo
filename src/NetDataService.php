@@ -561,23 +561,35 @@ class NetDataService
             $processCount = (int) round($total);
         }
 
+        $cpuLimitVal = $cpuLimit !== null ? (float) $cpuLimit : null;
+        $memLimitVal = $memLimit !== null ? (float) $memLimit : null;
+
         return [
             'success'       => true,
             'username'      => $username,
             'resource_plan' => $resourcePlan,
             'cpu' => [
-                'used_percent'  => $cpuUsage,
-                'limit_percent' => $cpuLimit !== null ? (float) $cpuLimit : null,
-                'note'          => $cpuUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
+                'used_percent'    => $cpuUsage,
+                'limit_percent'   => $cpuLimitVal,
+                'plan_percent'    => ($cpuUsage !== null && $cpuLimitVal > 0)
+                                        ? round($cpuUsage / $cpuLimitVal * 100, 1)
+                                        : null,
+                'note'            => $cpuUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
             'ram' => [
-                'used_mb'  => $memUsage,
-                'limit_mb' => $memLimit !== null ? (float) $memLimit : null,
-                'note'     => $memUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
+                'used_mb'      => $memUsage,
+                'limit_mb'     => $memLimitVal,
+                'plan_percent' => ($memUsage !== null && $memLimitVal > 0)
+                                        ? round($memUsage / $memLimitVal * 100, 1)
+                                        : null,
+                'note'         => $memUsage === null ? 'apps.plugin not tracking this user (user may be idle or plugin disabled)' : null,
             ],
             'processes' => [
-                'count'     => $processCount,
-                'max_tasks' => $taskLimit !== null ? (int) $taskLimit : null,
+                'count'        => $processCount,
+                'max_tasks'    => $taskLimit !== null ? (int) $taskLimit : null,
+                'plan_percent' => ($processCount !== null && $taskLimit > 0)
+                                        ? round($processCount / (int) $taskLimit * 100, 1)
+                                        : null,
             ],
             'quota' => $quota ?: null,
         ];
