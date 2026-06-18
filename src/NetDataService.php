@@ -439,9 +439,24 @@ class NetDataService
         $quota      = [];
 
         // --- Webuzo resource limits (CPU/RAM plan) ---
+        // mem_max is returned as a string with suffix: "128M", "2G", "512K", etc.
+        $parseMemToMb = static function (?string $val): ?float {
+            if ($val === null || $val === '' || $val === '0') {
+                return null;
+            }
+            $num    = (float) $val;
+            $suffix = strtoupper(substr(trim($val), -1));
+            return match ($suffix) {
+                'G'     => round($num * 1024, 2),
+                'M'     => round($num, 2),
+                'K'     => round($num / 1024, 2),
+                default => round($num, 2),
+            };
+        };
+
         $limitsResult = WebuzoService::getUserResourceLimits($username);
         $cpuLimit     = $limitsResult['success'] ? $limitsResult['cpu_quota']  : null;
-        $memLimit     = $limitsResult['success'] ? $limitsResult['memory_max'] : null;
+        $memLimit     = $limitsResult['success'] ? $parseMemToMb($limitsResult['memory_max']) : null;
         $taskLimit    = $limitsResult['success'] ? $limitsResult['max_tasks']  : null;
         $resourcePlan = $limitsResult['success'] ? $limitsResult['plan']       : null;
 
