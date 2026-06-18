@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Webuzo;
 
+use Webuzo\WebuzoService;
+
 class NetDataService
 {
     // -------------------------------------------------------------------------
@@ -426,42 +428,52 @@ class NetDataService
     // -------------------------------------------------------------------------
 
     /**
-     * استهلاك مستخدم معين من الباندويدث والـ Disk من الـ Webuzo API
-     * (NetData لا يعرف مستخدمي Webuzo، لذا نجلب هذه البيانات من Webuzo مباشرة)
+     * استهلاك مستخدم معين (bandwidth + disk) من Webuzo Admin API
      */
     public static function getUserUsage(string $username): array
     {
-        try {
-            $response = \Webuzo\Facades\Webuzo::enduserAs($username)->bandwidth([]);
+        $userResult = WebuzoService::getUser($username);
 
-            if (!$response->ok()) {
-                return ['success' => false, 'message' => $response->error()];
-            }
-
-            $data = $response->data;
-
-            return [
-                'success'   => true,
-                'username'  => $username,
-                'bandwidth' => [
-                    'used_mb'   => $data['used'] ?? 0,
-                    'limit_mb'  => $data['limit'] ?? 0,
-                    'percent'   => isset($data['used'], $data['limit']) && $data['limit'] > 0
-                                    ? round($data['used'] / $data['limit'] * 100, 2)
-                                    : 0,
-                ],
-                'disk' => [
-                    'used_mb'   => $data['disk_used'] ?? 0,
-                    'limit_mb'  => $data['disk_limit'] ?? 0,
-                    'percent'   => isset($data['disk_used'], $data['disk_limit']) && $data['disk_limit'] > 0
-                                    ? round($data['disk_used'] / $data['disk_limit'] * 100, 2)
-                                    : 0,
-                ],
-                'raw' => $data,
-            ];
-        } catch (\Exception $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+        if (!$userResult['success']) {
+            return ['success' => false, 'message' => $userResult['error'] ?? 'User not found'];
         }
+
+        $resources = $userResult['user']['resources'];
+        $disk      = $resources['disk'] ?? [];
+        $bw        = $resources['bandwidth'] ?? [];
+
+        $diskUsed  = (float) ($disk['used'] ?? 0);
+        $diskLimit = (float) ($disk['limit'] ?? 0);
+        $diskPct   = $diskLimit > 0 ? round($diskUsed / $diskLimit * 100, 2) : 0;
+
+        $bwUsed    = (float) ($bw['used'] ?? 0);
+        $bwLimit   = (float) ($bw['limit'] ?? 0);
+        $bwPct     = $bwLimit > 0 ? round($bwUsed / $bwLimit * 100, 2) : 0;
+
+        return [
+            'success'   => true,
+            'username'  => $username,
+            'disk' => [
+                'used_mb'   => $diskUsed,
+                'limit_mb'  => $diskLimit,
+                'used_gb'   => round($diskUsed / 1024, 3),
+                'limit_gb'  => round($diskLimit / 1024, 3),
+                'percent'   => $diskPct,
+                'raw'       => $disk,
+            ],
+            'bandwidth' => [
+                'used_mb'   => $bwUsed,
+                'limit_mb'  => $bwLimit,
+                'used_gb'   => round($bwUsed / 1024, 3),
+                'limit_gb'  => round($bwLimit / 1024, 3),
+                'percent'   => $bwPct,
+                'raw'       => $bw,
+            ],
+            'other_resources' => [
+                'email_accounts' => $resources['email_accounts'] ?? [],
+                'databases'      => $resources['databases'] ?? [],
+            ],
+        ];
     }
 
     // -------------------------------------------------------------------------
